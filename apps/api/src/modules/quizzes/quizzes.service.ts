@@ -12,6 +12,9 @@ export async function generateQuiz(courseId: string, lessonId: string, educatorI
   const lesson = await prisma.lesson.findFirst({ where: { id: lessonId, courseId } });
   if (!lesson) throw notFound('Lesson');
 
+  // Background indexing on save can miss (e.g. the AI service was asleep), so index again first.
+  // Re-indexing is idempotent: it replaces the lesson's chunks.
+  await aiClient.indexLesson({ courseId, lessonId, title: lesson.title, content: lesson.content });
   const result = await aiClient.generateQuiz({ courseId, lessonId, count });
 
   // Never trust model output blindly: keep only questions that pass the shared schema.

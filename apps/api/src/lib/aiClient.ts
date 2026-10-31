@@ -59,7 +59,7 @@ export interface GeneratedQuestion {
 
 export const aiClient = {
   indexLesson: (body: { courseId: string; lessonId: string; title: string; content: string }) =>
-    call<{ chunks: number }>('/index', { method: 'POST', body: JSON.stringify(body) }),
+    call<{ chunks: number }>('/index', { method: 'POST', body: JSON.stringify(body), timeoutMs: 120_000 }),
 
   deleteLesson: (lessonId: string) =>
     call<{ deleted: number }>(`/index/lessons/${lessonId}`, { method: 'DELETE' }),
