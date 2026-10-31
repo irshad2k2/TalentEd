@@ -1,0 +1,164 @@
+// MySQL holds everything that needs relations, foreign keys and transactions:
+// users, sessions, courses, enrollments and money.
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  EDUCATOR
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String   @db.VarChar(80)
+  email        String   @unique @db.VarChar(191)
+  passwordHash String
+  role         Role     @default(STUDENT)
+  createdAt    DateTime @default(now())
+
+  courses       Course[]
+  enrollments   Enrollment[]
+  refreshTokens RefreshToken[]
+  progress      LessonProgress[]
+  orders        Order[]
+  uploads       Upload[]
+}
+
+// One row per refresh token ever issued. Tokens are stored HASHED, never in plain text.
+// All tokens descended from one login share a familyId; reuse of an old token revokes the family.
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  familyId   String
+  tokenHash  String    @unique @db.VarChar(64)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([userId])
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  educatorId  String
+  title       String   @db.VarChar(120)
+  description String   @db.Text
+  category    String   @db.VarChar(40)
+  pricePaise  Int      @default(0)
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  educator    User         @relation(fields: [educatorId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  enrollments Enrollment[]
+  orders      Order[]
+  shareLinks  ShareLink[]
+
+  @@index([published, id])
+  @@index([educatorId])
+}
+
+model Lesson {
+  id        String   @id @default(cuid())
+  courseId  String
+  title     String   @db.VarChar(120)
+  content   String   @db.MediumText
+  videoKey  String?  @db.VarChar(300)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course   Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress LessonProgress[]
+
+  @@index([courseId, position])
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  // A student can enroll in a course only once - the database enforces it.
+  @@unique([userId, courseId])
+}
+
+model LessonProgress {
+  userId      String
+  lessonId    String
+  completedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@id([userId, lessonId])
+}
+
+enum OrderStatus {
+  CREATED
+  PAID
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String
+  courseId        String
+  razorpayOrderId String      @unique @db.VarChar(64)
+  amountPaise     Int
+  status          OrderStatus @default(CREATED)
+  createdAt       DateTime    @default(now())
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course          Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  payments        Payment[]
+}
+
+// Append-only payment ledger. The UNIQUE razorpayPaymentId is the idempotency key:
+// whichever of (browser callback, webhook) arrives second hits a duplicate-key error and does nothing.
+model Payment {
+  id                String   @id @default(cuid())
+  orderId           String
+  razorpayPaymentId String   @unique @db.VarChar(64)
+  amountPaise       Int
+  source            String   @db.VarChar(16)
+  createdAt         DateTime @default(now())
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+enum UploadStatus {
+  PENDING
+  COMPLETE
+}
+
+model Upload {
+  id          String       @id @default(cuid())
+  userId      String
+  key         String       @unique @db.VarChar(300)
+  contentType String       @db.VarChar(64)
+  size        BigInt
+  status      UploadStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ShareLink {
+  id           String   @id @default(cuid())
+  courseId     String
+  token        String   @unique @db.VarChar(64)
+  passwordHash String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
