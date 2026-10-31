@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-and-web:
+    name: API + Web (lint, typecheck, tests, build)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: talented_test
+          MYSQL_USER: talented
+          MYSQL_PASSWORD: talentedpass
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+      mongo:
+        image: mongo:7
+        ports: ['27017:27017']
+    env:
+      DATABASE_URL: mysql://talented:talentedpass@127.0.0.1:3306/talented_test
+      MONGO_URL: mongodb://127.0.0.1:27017/talented_test
+      INTEGRATION: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - name: Prisma client + migrations
+        working-directory: apps/api
+        run: npx prisma generate && npx prisma migrate deploy
+      - run: npm run lint
+      - run: npm run typecheck -w apps/api
+      - run: npm run typecheck -w apps/web
+      - name: API tests (unit + integration against real MySQL and MongoDB)
+        run: npm test -w apps/api
+      - run: npm run build -w apps/web
+
+  ai:
+    name: AI service (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: apps/ai/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  docker:
+    name: Docker images build
+    needs: [api-and-web, ai]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f apps/api/Dockerfile -t talented-api .
+      - run: docker build -f apps/web/Dockerfile -t talented-web .
+      - run: docker build -t talented-ai apps/ai
