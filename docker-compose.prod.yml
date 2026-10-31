@@ -1,0 +1,24 @@
+# Production overrides for a single EC2 host:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Databases are no longer exposed to the internet and every service restarts on failure.
+services:
+  mysql:
+    ports: !reset []
+    restart: unless-stopped
+  mongo:
+    ports: !reset []
+    restart: unless-stopped
+  minio:
+    ports: !reset ['9000:9000']
+    restart: unless-stopped
+  ai:
+    ports: !reset []
+    restart: unless-stopped
+  api:
+    ports: !reset []
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+  web:
+    ports: !reset ['80:80']
+    restart: unless-stopped
