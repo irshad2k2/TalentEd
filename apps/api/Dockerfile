@@ -1,7 +1,7 @@
 # Build context is the REPO ROOT (the API depends on packages/shared).
 # ---------- build stage ----------
 FROM node:20-slim AS build
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # Copy manifests first so `npm ci` is cached until dependencies actually change
@@ -21,7 +21,7 @@ RUN npm prune --omit=dev --workspace packages/shared --workspace apps/api
 
 # ---------- runtime stage ----------
 FROM node:20-slim
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
