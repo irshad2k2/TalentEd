@@ -1,0 +1,26 @@
+{
+  "name": "talented",
+  "private": true,
+  "version": "1.0.0",
+  "description": "AI-powered learning platform: React + Node/Express + GraphQL + MySQL + MongoDB + FastAPI RAG",
+  "workspaces": [
+    "packages/shared",
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w packages/shared",
+    "dev:api": "npm run dev -w apps/api",
+    "dev:web": "npm run dev -w apps/web",
+    "typecheck": "npm run build:shared && npm run typecheck -w apps/api && npm run typecheck -w apps/web",
+    "lint": "npm run lint -w apps/api && npm run lint -w apps/web",
+    "test": "npm test -w apps/api",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
